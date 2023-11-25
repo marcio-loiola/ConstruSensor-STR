@@ -18,40 +18,9 @@ header {
 
 main {
   height: 90vh;
-  background-color: #e0e0e057;
 
   section {
     height: 100%;
-
-    display: flex;
-    gap: 30px;
-    flex-wrap: wrap;
-    flex-direction: row;
-    justify-content: center;
-    align-items: center;
-
-    .sensor {
-      cursor: pointer;
-      width: 280px;
-      height: 280px;
-      transition: transform 0.3s ease-in-out;
-      
-      &:hover {
-        transform: scale(1.01);
-      }
-
-      .conteudo {
-        height: 100%;
-
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-
-        span {
-          font-size: 18px;
-        }
-      }
-    }
+    padding: 30px;
   }
 }

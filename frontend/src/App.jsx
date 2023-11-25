@@ -1,49 +1,21 @@
-import { Alert, AlertTitle, Badge, Box, Card, CardContent, Typography } from '@mui/material'
-import { useState } from 'react'
+import { BrowserRouter as Router, Route, Routes } from 'react-router-dom'
+import Home from './pages/Home'
+import SensorRuido from './pages/SensorRuido'
+import SensorTemperatura from './pages/SensorTemperatura'
+import SensorVibracao from './pages/SensorVibracao'
+import SensorPoeira from './pages/SensorPoeira'
 
 function App() {
   return (
-    <>
-      <header>
-        <h1>ConstruSensor - Sensores</h1>
-      </header>
-
-      <main>
-        <section id="container_sensores">
-          <Badge badgeContent={4} color="error">
-            <Card className="sensor">
-              <CardContent className="conteudo">
-                <span>Sensor de Ruído</span>
-              </CardContent>
-            </Card>
-          </Badge>
-
-          <Badge badgeContent={4} color="error">
-            <Card className="sensor">
-              <CardContent className="conteudo">
-                <span>Sensor de Temperatura</span>
-              </CardContent>
-            </Card>
-          </Badge>
-
-          <Badge badgeContent={4} color="error">
-            <Card className="sensor">
-              <CardContent className="conteudo">
-                <span>Sensor de Vibração</span>
-              </CardContent>
-            </Card>
-          </Badge>
-
-          <Badge badgeContent={4} color="error">
-            <Card className="sensor">
-              <CardContent className="conteudo">
-                <span>Sensor de Poeira</span>
-              </CardContent>
-            </Card>
-          </Badge>
-        </section>
-      </main>
-    </>
+    <Router>
+      <Routes>
+        <Route path="/" element={<Home/>}/>
+        <Route path="/sensor-ruido" element={<SensorRuido/>}/>
+        <Route path="/sensor-temperatura" element={<SensorTemperatura/>}/>
+        <Route path="/sensor-vibracao" element={<SensorVibracao/>}/>
+        <Route path="/sensor-poeira" element={<SensorPoeira/>}/>
+      </Routes>
+    </Router>
   )
 }
 
