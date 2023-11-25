@@ -1,22 +1,48 @@
+import { Alert, AlertTitle, Badge, Box, Card, CardContent, Typography } from '@mui/material'
 import { useState } from 'react'
 
 function App() {
-  const [count, setCount] = useState(0)
-
   return (
     <>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
+      <header>
+        <h1>ConstruSensor - Sensores</h1>
+      </header>
+
+      <main>
+        <section id="container_sensores">
+          <Badge badgeContent={4} color="error">
+            <Card className="sensor">
+              <CardContent className="conteudo">
+                <span>Sensor de Ruído</span>
+              </CardContent>
+            </Card>
+          </Badge>
+
+          <Badge badgeContent={4} color="error">
+            <Card className="sensor">
+              <CardContent className="conteudo">
+                <span>Sensor de Temperatura</span>
+              </CardContent>
+            </Card>
+          </Badge>
+
+          <Badge badgeContent={4} color="error">
+            <Card className="sensor">
+              <CardContent className="conteudo">
+                <span>Sensor de Vibração</span>
+              </CardContent>
+            </Card>
+          </Badge>
+
+          <Badge badgeContent={4} color="error">
+            <Card className="sensor">
+              <CardContent className="conteudo">
+                <span>Sensor de Poeira</span>
+              </CardContent>
+            </Card>
+          </Badge>
+        </section>
+      </main>
     </>
   )
 }
