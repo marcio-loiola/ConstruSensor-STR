@@ -33,15 +33,14 @@ void tarefaBotao(void *pvParameters) {
       xSemaphoreGive(statusMutex);
     }
 
-    vTaskDelay(11000 / portTICK_PERIOD_MS);
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
 }
 
 void tarefaVibracao(void *pvParameters) {
   pinMode(VIBRACAO_PINO, INPUT);
 
-  int ultimaLeitura = 0;
-  int debounceDelay = 50;
+  TickType_t xLastWakeTime = xTaskGetTickCount();
 
   while (1) {
     int sensorVibracao = digitalRead(VIBRACAO_PINO);
@@ -58,11 +57,14 @@ void tarefaVibracao(void *pvParameters) {
     }
 
     ultimaLeitura = sensorVibracao;
-    vTaskDelay(2000 / portTICK_PERIOD_MS);
+    vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(2000));
   }
 }
 
+
 void tarefaTemperatura(void *pvParameters) {
+  TickType_t xLastWakeTime = xTaskGetTickCount();
+
   while (1) {
     float temperatura = analogRead(TEMPERATURA_PINO) * (3.3 / 4095) * 100;
 
@@ -72,13 +74,15 @@ void tarefaTemperatura(void *pvParameters) {
       xSemaphoreGive(statusMutex);
     }
 
-    vTaskDelay(10000 / portTICK_PERIOD_MS);  // Ajuste para 10 segundos
+    vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(10000));
   }
 }
 
 void tarefaRuido(void *pvParameters) {
+  TickType_t xLastWakeTime = xTaskGetTickCount();
+
   int contadorLimite = 0;
-  const int periodoLeitura = 1000;
+  const int periodoLeitura = 4000;
   const int numLeituras = tempoLimite * 1000 / periodoLeitura;
 
   while (1) {
@@ -97,7 +101,7 @@ void tarefaRuido(void *pvParameters) {
       contadorLimite = 0;
     }
 
-    vTaskDelay(periodoLeitura / portTICK_PERIOD_MS);
+    vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(periodoLeitura));
   }
 }
 
