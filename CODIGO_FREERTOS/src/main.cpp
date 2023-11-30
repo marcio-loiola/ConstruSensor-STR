@@ -18,6 +18,8 @@ int statusRelogio = 0;
 int statusBuzzer = 0;
 const int limiteRuido = 70;
 const int tempoLimite = 10;
+bool buzzerAtivado = false;
+bool relogioAtivado = false;
 
 void tarefaBotao(void *pvParameters) {
   pinMode(BOTAO_PINO, INPUT_PULLUP);
@@ -102,9 +104,10 @@ void tarefaRuido(void *pvParameters) {
 void tarefaRelogio(void *pvParameters) {
   while (1) {
     xSemaphoreTake(statusMutex, portMAX_DELAY);
-    if (statusRuido == 1) {
+    if (statusRuido == 1 && !relogioAtivado) {
       Serial.println("Relógio ativado aqui!");
       statusRelogio = 1;
+      relogioAtivado = true;
     }
     xSemaphoreGive(statusMutex);
 
@@ -115,9 +118,10 @@ void tarefaRelogio(void *pvParameters) {
 void tarefaBuzzer(void *pvParameters) {
   while (1) {
     xSemaphoreTake(statusMutex, portMAX_DELAY);
-    if (statusVibracao == 1) {
+    if (statusVibracao == 1 && !buzzerAtivado) {
       Serial.println("Buzzer ativado aqui!");
       statusBuzzer = 1;
+      buzzerAtivado = true;
     }
     xSemaphoreGive(statusMutex);
 
