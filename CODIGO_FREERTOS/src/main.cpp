@@ -2,7 +2,6 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <freertos/semphr.h>
-#include "SPIFFS.h"
 #include <WiFi.h>
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
@@ -10,9 +9,9 @@
 
 #define BOTAO_PINO 2
 #define VIBRACAO_PINO 15
-#define TEMPERATURA_PINO 25
+#define TEMPERATURA_PINO 37
 #define RUIDO_PINO 32
-#define BUZZER_PINO 27
+#define BUZZER_PINO 25
 
 SemaphoreHandle_t statusMutex;
 int statusBotao = 0;
@@ -23,7 +22,7 @@ int statusRelogio = 0;
 int statusBuzzer = 0;
 int ultimaLeitura = 0;
 int debounceDelay = 50;
-const int limiteRuido = 70;
+const int limiteRuido = 240;
 const int tempoLimite = 10;
 bool buzzerAtivado = false;
 bool relogioAtivado = false;
@@ -33,37 +32,268 @@ const int duracaoDoSom = 1000;    // em milissegundos
 String ultimoResultado = " ";
 
 // WEBSocket
-// Credenciais da Internet
-const char *ssid = "Isaac´s Galaxy A02s";
-const char *password = "jspa9096";
-
 // Cria um objeto AsyncWebServer na porta 80
 AsyncWebServer server(80);
 
 // Cria um objeto WebSocket
 AsyncWebSocket ws("/ws");
 
-// Json Variable to Hold Sensor Readings
-JSONVar readings;
 
-// Timer variables
-unsigned long lastTime = 0;
-unsigned long timerDelay = 30000;
+// Credenciais da Internet
+const char *ssid = "Nome da Internet";
+const char *password = "";
+
+char index_html[] PROGMEM = R"rawliteral(
+  <!DOCTYPE html>
+  <html>
+
+  <head>
+    <title>ConstruSensor</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        * {padding: 0; margin: 0; box-sizing: border-box;}
+        html {font-family: Arial, Helvetica, sans-serif; display: inline-block;}
+
+        body {margin: 0;}
+
+        h1 {font-size: 1.8rem; color: white;}
+
+        .topnav {height: 10vh; display: flex; flex-direction: column; justify-content: center; align-items: center; background-color: #0A1128;}
+
+        .content {height: 90vh; padding: 30px;}
+
+        .content section {margin-bottom: 50px;}
+
+        .content section h2 {margin-bottom: 10px;}
+
+        .content section .alertas {margin-top: 50px;}
+
+        .alert {
+            padding: 20px;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+            background-color: #f8d7da;
+            color: #721c24;
+            position: relative;
+            margin-bottom: 20px;
+        }
+
+        .alert:last-child {margin-bottom: 0px;}
+
+        .alert-warning {border-color: #f5c6cb;}
+
+        .close-btn {position: absolute; top: 10px; right: 10px; cursor: pointer; font-weight: bold;}
+
+        .alert-title {font-size: 1.2em; font-weight: bold; margin-bottom: 10px;}
+
+        .alert-description {font-size: 1em;}
+    </style>
+  </head>
+  <body>
+    <div class="topnav">
+        <h1>ALERTAS - SENSORES (WEBSOCKET)</h1>
+    </div>
+    <div class="content">
+        <section id="sensor-ruido">
+            <h2>Sensor de Ruido</h2>
+            <hr>
+            <div class="alertas"></div>
+        </section>
+
+        <section id="sensor-temperatura">
+            <h2>Sensor de Temperatura</h2>
+            <hr>
+            <div class="alertas"></div>
+        </section>
+
+        <section id="sensor-vibracao">
+            <h2>Sensor de Vibracao</h2>
+            <hr>
+            <div class="alertas"></div>
+        </section>
+
+        <section id="sensor-poeira">
+            <h2>Sensor de Poeira</h2>
+            <hr>
+            <div class="alertas"></div>
+        </section>
+    </div>
+
+    <script>
+        function addAlert(nomeEvento, tipoSensor) {
+            var divAlertas;
+
+            if(tipoSensor == "ruido") {
+                divAlertas = document.querySelector('#sensor-ruido .alertas');
+            }
+            if(tipoSensor == "temperatura") {
+                divAlertas = document.querySelector('#sensor-temperatura .alertas');
+            }
+            if(tipoSensor == "vibracao") {
+                divAlertas = document.querySelector('#sensor-vibracao .alertas');
+            }
+            if(tipoSensor == "poeira") {
+                divAlertas = document.querySelector('#sensor-poeira .alertas');
+            }
+
+            var now = new Date();
+
+            divAlertas.innerHTML += `
+                <div class="alert alert-warning">
+                    <span class="close-btn" onclick="this.parentElement.style.display='none';">&times;</span>
+                    <div class="alert-title">${nomeEvento}</div>
+                    <div class="alert-description">
+                        <span class="hora">
+                            <strong>Hora: ${now.toLocaleTimeString()}</strong>
+                        </span>
+                        <br>
+                        <span class="data">
+                            <strong>Data: ${now.toLocaleDateString()}</strong>
+                        </span>
+                    </div>
+                </div>
+            `;
+        }
+
+        var gateway = `ws://${window.location.hostname}/ws`;
+        var websocket;
+
+        window.addEventListener('load', onload);
+
+        // Inicia o websocket quando a página carrega
+        function onload(event) {
+          iniciarWebSocket();
+        }
+
+        function getReadings() {
+          websocket.send("getReadings");
+        }
+
+        function iniciarWebSocket() {
+          console.log('Tentando abrir uma conexão WebSocket…');
+          websocket = new WebSocket(gateway);
+          websocket.onopen = onOpen;
+          websocket.onclose = onClose;
+          websocket.onmessage = onMessage;
+        }
+
+        // Quando o websocket for estabelecido, chame a função getReadings()
+        function onOpen(event) {
+          console.log('Conexão aberta');
+          getReadings();
+        }
+
+        function onClose(event) {
+          console.log('Conexão fechada');
+          setTimeout(iniciarWebSocket, 2000);
+        }
+
+        // Função que recebe a mensagem do ESP32 com as leituras
+        function onMessage(event) {
+            console.log(event.data);
+            var myObj = JSON.parse(event.data);
+
+            if(myObj["status_ruido"] == "1") {
+              addAlert("Deteccao de Ruido", "ruido");
+            }
+
+            if(myObj["status_temperatura"] == "1") {
+              addAlert("Deteccao de Temperatura", "temperatura");
+            }
+
+            if(myObj["status_vibracao"] == "1") {
+              addAlert("Deteccao de Vibracao", "vibracao");
+            }
+
+            if(myObj["status_botao"] == "1") {
+              addAlert("Deteccao de Poeira", "poeira");
+            }
+        }
+    </script>
+  </body>
+</html>
+)rawliteral";
+
+// Tarefas WebSocket - Início
+
+// Initialize WiFi
+void iniciarWifi(){
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+  Serial.print("Conectando ao WiFi..");
+  while (WiFi.status() != WL_CONNECTED) {
+    Serial.print('.');
+    delay(1000);
+  }
+  Serial.println(WiFi.localIP());
+}
+
+void notificarClientes(String sensorReadings){
+  ws.textAll(sensorReadings);
+}
+
+void handleWebSocketMessage(void *arg, uint8_t *data, size_t len){
+  AwsFrameInfo *info = (AwsFrameInfo *)arg;
+  if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT){
+    data[len] = 0;
+    String message = (char*)data;
+    // Verifica se a mensagem é "getReadings"
+    if(strcmp((char*)data, "getReadings") == 0) {
+      JSONVar statusSensores;
+
+      statusSensores["status_ruido"] = statusRuido;
+      statusSensores["status_temperatura"] = statusTemperatura;
+      statusSensores["status_vibracao"] = statusVibracao;
+      statusSensores["status_poeira"] = statusBotao;
+
+      // Se for, envie as leituras atuais do sensor
+      String sensorReadings = JSON.stringify(statusSensores);
+      Serial.println(sensorReadings);
+      notificarClientes(sensorReadings);
+    }
+  }
+}
+
+void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len){
+  switch(type){
+    case WS_EVT_CONNECT:
+      Serial.printf("WebSocket client #%u connected from %s\n", client->id(), client->remoteIP().toString().c_str());
+      break;
+    case WS_EVT_DISCONNECT:
+      Serial.printf("WebSocket client #%u disconnected\n", client->id());
+      break;
+    case WS_EVT_DATA:
+      handleWebSocketMessage(arg, data, len);
+      break;
+    case WS_EVT_PONG:
+    case WS_EVT_ERROR:
+      break;
+  }
+}
+
+void iniciarWebSocket(){
+  ws.onEvent(onEvent);
+  server.addHandler(&ws);
+}
+
+// Tarefas WebSocket - Fim
 
 
 void tarefaBotao(void *pvParameters) {
-  pinMode(BOTAO_PINO, INPUT_PULLUP);
+  pinMode(BOTAO_PINO, INPUT);
 
   while(1){
     int botaoPressionado = digitalRead(BOTAO_PINO);
 
-    if (botaoPressionado == LOW){
+    Serial.println(botaoPressionado);
+    
+    if(botaoPressionado == HIGH){
       xSemaphoreTake(statusMutex, portMAX_DELAY);
+      Serial.println("Ola botao");
       statusBotao = 1;
       xSemaphoreGive(statusMutex);
     }
 
-    readings["status_botao"] = String(statusBotao);
     vTaskDelay(1000 / portTICK_PERIOD_MS);
   }
 }
@@ -88,7 +318,6 @@ void tarefaVibracao(void *pvParameters){
     }
 
     ultimaLeitura = sensorVibracao;
-    readings["status_vibracao"] = String(statusVibracao);
     vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(2000));
   }
 }
@@ -99,13 +328,14 @@ void tarefaTemperatura(void *pvParameters){
   while(1){
     float temperatura = analogRead(TEMPERATURA_PINO) * (3.3 / 4095) * 100;
 
+    Serial.println(temperatura);
+
     if(temperatura > 15.0){
       xSemaphoreTake(statusMutex, portMAX_DELAY);
       statusTemperatura = 1;
       xSemaphoreGive(statusMutex);
     }
-    
-    readings["status_temperatura"] = String(statusTemperatura);
+  
     vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(10000));
   }
 }
@@ -120,7 +350,7 @@ void tarefaRuido(void *pvParameters){
   while (1){
     float nivelRuido = analogRead(RUIDO_PINO);
 
-    if (nivelRuido > limiteRuido){
+    if(nivelRuido > limiteRuido){
       contadorLimite++;
 
       if (contadorLimite >= numLeituras){
@@ -133,7 +363,6 @@ void tarefaRuido(void *pvParameters){
       contadorLimite = 0;
     }
 
-    readings["status_ruido"] = String(statusRuido);
     vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(periodoLeitura));
   }
 }
@@ -179,97 +408,68 @@ void tarefaBuzzer(void *pvParameters){
   }
 }
 
-void tarefaMonitor(void *pvParameters){
-  while (1){
+void tarefaMonitor(void *pvParameters) {
+  while (1) {
     vTaskDelay(15000 / portTICK_PERIOD_MS); // Ajuste para 15 segundos
 
     xSemaphoreTake(statusMutex, portMAX_DELAY);
-    if (statusBotao == 1){
+
+    if(statusBotao == 1) {
       Serial.println("Botão pressionado!");
+
+      JSONVar statusSensorPoeira;
+      statusSensorPoeira["status_poeira"] = statusBotao;
+
+      String statusSensor = JSON.stringify(statusSensorPoeira);
+      Serial.println(statusSensor);
+      notificarClientes(statusSensor);
       statusBotao = 0;
     }
-    if (statusVibracao == 1){
+
+    if(statusVibracao == 1) {
       Serial.println("Vibração detectada!");
+
+      JSONVar statusSensorVibracao;
+      statusSensorVibracao["status_vibracao"] = statusVibracao;
+
+      String statusSensor = JSON.stringify(statusSensorVibracao);
+      Serial.println(statusSensor);
+      notificarClientes(statusSensor);
       statusVibracao = 0;
     }
-    if (statusTemperatura == 1){
+
+    if(statusTemperatura == 1) {
       Serial.println("Temperatura acima de 15 graus!");
+
+      JSONVar statusSensorTemperatura;
+      statusSensorTemperatura["status_temperatura"] = statusTemperatura;
+
+      String statusSensor = JSON.stringify(statusSensorTemperatura);
+      Serial.println(statusSensor);
+      notificarClientes(statusSensor);
       statusTemperatura = 0;
     }
-    if (statusRuido == 1){
+
+    if(statusRuido == 1) {
       Serial.println("Ruído acima de 30 dB!");
+
+      JSONVar statusSensorRuido;
+      statusSensorRuido["status_ruido"] = statusRuido;
+
+      String statusSensor = JSON.stringify(statusSensorRuido);
+      Serial.println(statusSensor);
+      notificarClientes(statusSensor);
       statusRuido = 0;
     }
     xSemaphoreGive(statusMutex);
   }
 }
 
-// Tarefas WebSocket - Início
-
-// Initialize SPIFFS
-void initSPIFFS(){
-  if (!SPIFFS.begin(true)){
-    Serial.println("An error has occurred while mounting SPIFFS");
-  }
-  Serial.println("SPIFFS mounted successfully");
-}
-
-// Initialize WiFi
-void initWiFi(){
-  WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(1000);
-    Serial.println("Conectando ao Wifi....");
-  }
-  Serial.print("IP para conectar: ");
-  Serial.println(WiFi.localIP());
-}
-
-void notifyClients(String sensorReadings){
-  ws.textAll(sensorReadings);
-}
-
-void handleWebSocketMessage(void *arg, uint8_t *data, size_t len){
-  AwsFrameInfo *info = (AwsFrameInfo *)arg;
-  if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT){
-    data[len] = 0;
-    String message = (char*)data;
-    // Check if the message is "getReadings"
-    if(strcmp((char*)data, "getReadings") == 0) {
-    // if it is, send current sensor readings
-      String sensorReadings = JSON.stringify(readings);
-      Serial.print(sensorReadings);
-      notifyClients(sensorReadings);
-    }
-  }
-}
-
-void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len){
-  switch (type){
-  case WS_EVT_CONNECT:
-    Serial.printf("WebSocket client #%u connected from %s\n", client->id(), client->remoteIP().toString().c_str());
-    break;
-  case WS_EVT_DISCONNECT:
-    Serial.printf("WebSocket client #%u disconnected\n", client->id());
-    break;
-  case WS_EVT_DATA:
-    handleWebSocketMessage(arg, data, len);
-    break;
-  case WS_EVT_PONG:
-  case WS_EVT_ERROR:
-    break;
-  }
-}
-
-void initWebSocket(){
-  ws.onEvent(onEvent);
-  server.addHandler(&ws);
-}
-
-// Tarefas WebSocket - Fim
-
 void setup(){
+  iniciarWebSocket();
+
   Serial.begin(115200);
+  iniciarWifi();
   statusMutex = xSemaphoreCreateMutex();
 
   xTaskCreatePinnedToCore(tarefaVibracao, "TarefaVibracao", 4096, NULL, 1, NULL, 1);
@@ -281,34 +481,30 @@ void setup(){
   xTaskCreatePinnedToCore(tarefaRelogio, "TarefaRelogio", 4096, NULL, 2, NULL, 0);
   xTaskCreatePinnedToCore(tarefaMonitor, "TarefaMonitor", 4096, NULL, 3, NULL, 0);
 
-  initWiFi();
-  initSPIFFS();
-  initWebSocket();
+  // URL raiz do servidor Web
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send_P(200, "text/html", index_html);
+  });
 
-  // Web Server Root URL
-  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){ request->send(SPIFFS, "/index.html", "text/html"); });
-  server.serveStatic("/", SPIFFS, "/");
-
-  // Start server
+  // Iniciar servidor
   server.begin();
 }
 
 void loop(){
-  if ((millis() - lastTime) > timerDelay){
-    String sensorReadings = JSON.stringify(readings);
-    if (ultimoResultado == " "){
-      Serial.println(sensorReadings);
-      Serial.println("Primeira execucao");
-      ultimoResultado = sensorReadings;
-    }
-    if (ultimoResultado != sensorReadings){
-      ultimoResultado = sensorReadings;
-      Serial.println(sensorReadings);
-      notifyClients(sensorReadings);
-    }
-
-    lastTime = millis();
-  }
+  // if((millis() - lastTime) > timerDelay){
+  //   String sensorReadings = JSON.stringify(readings);
+  //   if(ultimoResultado == " "){
+  //     Serial.println(sensorReadings);
+  //     Serial.println("Primeira execucao");
+  //     ultimoResultado = sensorReadings;
+  //   }
+  //   if(ultimoResultado != sensorReadings){
+  //     ultimoResultado = sensorReadings;
+  //     Serial.println(sensorReadings);
+  //     notificarClientes(sensorReadings);
+  //   }
+  //   lastTime = millis();
+  // }
 
   ws.cleanupClients();
 }
