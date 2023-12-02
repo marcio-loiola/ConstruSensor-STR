@@ -1,55 +1,25 @@
 <!DOCTYPE html>
-<html>
-
-<head>
+  <html>
+  <head>
     <title>ConstruSensor</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-        * {
-            padding: 0;
-            margin: 0;
-            box-sizing: border-box;
-        }
+        * {padding: 0; margin: 0; box-sizing: border-box;}
+        html {font-family: Arial, Helvetica, sans-serif; display: inline-block;}
 
-        html {
-            font-family: Arial, Helvetica, sans-serif;
-            display: inline-block;
-        }
+        body {margin: 0;}
 
-        body {
-            margin: 0;
-        }
+        h1 {font-size: 1.8rem; color: white;}
 
-        h1 {
-            font-size: 1.8rem;
-            color: white;
-        }
+        .topnav {height: 10vh; display: flex; flex-direction: column; justify-content: center; align-items: center; background-color: #0A1128;}
 
-        .topnav {
-            height: 10vh;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            background-color: #0A1128;
-        }
+        .content {height: 90vh; padding: 30px;}
 
-        .content {
-            height: 90vh;
-            padding: 30px;
-        }
+        .content section {margin-bottom: 50px;}
 
-        .content section {
-            margin-bottom: 50px;
-        }
+        .content section h2 {margin-bottom: 10px;}
 
-        .content section h2 {
-            margin-bottom: 10px;
-        }
-
-        .content section .alertas {
-            margin-top: 50px;
-        }
+        .content section .alertas {margin-top: 50px;}
 
         .alert {
             padding: 20px;
@@ -61,35 +31,18 @@
             margin-bottom: 20px;
         }
 
-        .alert:last-child {
-            margin-bottom: 0px;
-        }
+        .alert:last-child {margin-bottom: 0px;}
 
-        .alert-warning {
-            border-color: #f5c6cb;
-        }
+        .alert-warning {border-color: #f5c6cb;}
 
-        .close-btn {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            cursor: pointer;
-            font-weight: bold;
-        }
+        .close-btn {position: absolute; top: 10px; right: 10px; cursor: pointer; font-weight: bold;}
 
-        .alert-title {
-            font-size: 1.2em;
-            font-weight: bold;
-            margin-bottom: 10px;
-        }
+        .alert-title {font-size: 1.2em; font-weight: bold; margin-bottom: 10px;}
 
-        .alert-description {
-            font-size: 1em;
-        }
+        .alert-description {font-size: 1em;}
     </style>
-</head>
-
-<body>
+  </head>
+  <body>
     <div class="topnav">
         <h1>ALERTAS - SENSORES (WEBSOCKET)</h1>
     </div>
@@ -162,30 +115,30 @@
 
         // Inicia o websocket quando a página carrega
         function onload(event) {
-            initWebSocket();
+          iniciarWebSocket();
         }
 
         function getReadings() {
-            websocket.send("getReadings");
+          websocket.send("getReadings");
         }
 
-        function initWebSocket() {
-            console.log('Tentando abrir uma conexão WebSocket…');
-            websocket = new WebSocket(gateway);
-            websocket.onopen = onOpen;
-            websocket.onclose = onClose;
-            websocket.onmessage = onMessage;
+        function iniciarWebSocket() {
+          console.log('Tentando abrir uma conexão WebSocket…');
+          websocket = new WebSocket(gateway);
+          websocket.onopen = onOpen;
+          websocket.onclose = onClose;
+          websocket.onmessage = onMessage;
         }
 
         // Quando o websocket for estabelecido, chame a função getReadings()
         function onOpen(event) {
-            console.log('Conexão aberta');
-            getReadings();
+          console.log('Conexão aberta');
+          getReadings();
         }
 
         function onClose(event) {
-            console.log('Conexão fechada');
-            setTimeout(initWebSocket, 2000);
+          console.log('Conexão fechada');
+          setTimeout(iniciarWebSocket, 2000);
         }
 
         // Função que recebe a mensagem do ESP32 com as leituras
@@ -194,22 +147,21 @@
             var myObj = JSON.parse(event.data);
 
             if(myObj["status_ruido"] == "1") {
-                addAlert("Deteccao de Ruido", "ruido");
+              addAlert("Deteccao de Ruido", "ruido");
             }
 
             if(myObj["status_temperatura"] == "1") {
-                addAlert("Deteccao de Temperatura", "temperatura");
+              addAlert("Deteccao de Temperatura", "temperatura");
             }
 
             if(myObj["status_vibracao"] == "1") {
-                addAlert("Deteccao de Vibracao", "vibracao");
+              addAlert("Deteccao de Vibracao", "vibracao");
             }
 
             if(myObj["status_poeira"] == "1") {
-                addAlert("Deteccao de Poeira", "poeira");
+              addAlert("Deteccao de Poeira", "poeira");
             }
         }
     </script>
-</body>
-
+  </body>
 </html>

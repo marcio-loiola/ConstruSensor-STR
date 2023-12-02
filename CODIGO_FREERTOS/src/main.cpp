@@ -9,9 +9,10 @@
 
 #define BOTAO_PINO 2
 #define VIBRACAO_PINO 15
+#define VIBRACAO_RESERVA_PINO 12
 #define TEMPERATURA_PINO 37
 #define RUIDO_PINO 32
-#define BUZZER_PINO 25
+#define BUZZER_PINO 38
 
 SemaphoreHandle_t statusMutex;
 int statusBotao = 0;
@@ -20,15 +21,13 @@ int statusTemperatura = 0;
 int statusRuido = 0;
 int statusRelogio = 0;
 int statusBuzzer = 0;
-int ultimaLeitura = 0;
+int ultimaLeituraBotao = 1;
+int ultimaLeituraVibracao = 0;
 int debounceDelay = 50;
 const int limiteRuido = 240;
 const int tempoLimite = 10;
 bool buzzerAtivado = false;
 bool relogioAtivado = false;
-const int pinoDoSom = 17;         // substitua pelo pino que você conectou no ESP
-const int frequenciaDoSom = 1000; // em Hertz
-const int duracaoDoSom = 1000;    // em milissegundos
 String ultimoResultado = " ";
 
 // WEBSocket
@@ -38,15 +37,13 @@ AsyncWebServer server(80);
 // Cria um objeto WebSocket
 AsyncWebSocket ws("/ws");
 
-
 // Credenciais da Internet
-const char *ssid = "Nome da Internet";
-const char *password = "";
+const char *ssid = "ContruSensor STR";
+const char *password = "jspa9096";
 
 char index_html[] PROGMEM = R"rawliteral(
   <!DOCTYPE html>
   <html>
-
   <head>
     <title>ConstruSensor</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -205,7 +202,7 @@ char index_html[] PROGMEM = R"rawliteral(
               addAlert("Deteccao de Vibracao", "vibracao");
             }
 
-            if(myObj["status_botao"] == "1") {
+            if(myObj["status_poeira"] == "1") {
               addAlert("Deteccao de Poeira", "poeira");
             }
         }
@@ -221,7 +218,7 @@ void iniciarWifi(){
   WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
   Serial.print("Conectando ao WiFi..");
-  while (WiFi.status() != WL_CONNECTED) {
+  while (WiFi.status() != WL_CONNECTED){
     Serial.print('.');
     delay(1000);
   }
@@ -234,11 +231,11 @@ void notificarClientes(String sensorReadings){
 
 void handleWebSocketMessage(void *arg, uint8_t *data, size_t len){
   AwsFrameInfo *info = (AwsFrameInfo *)arg;
-  if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT){
+  if(info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT){
     data[len] = 0;
-    String message = (char*)data;
+    String message = (char *)data;
     // Verifica se a mensagem é "getReadings"
-    if(strcmp((char*)data, "getReadings") == 0) {
+    if(strcmp((char *)data, "getReadings") == 0){
       JSONVar statusSensores;
 
       statusSensores["status_ruido"] = statusRuido;
@@ -255,19 +252,19 @@ void handleWebSocketMessage(void *arg, uint8_t *data, size_t len){
 }
 
 void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len){
-  switch(type){
-    case WS_EVT_CONNECT:
-      Serial.printf("WebSocket client #%u connected from %s\n", client->id(), client->remoteIP().toString().c_str());
-      break;
-    case WS_EVT_DISCONNECT:
-      Serial.printf("WebSocket client #%u disconnected\n", client->id());
-      break;
-    case WS_EVT_DATA:
-      handleWebSocketMessage(arg, data, len);
-      break;
-    case WS_EVT_PONG:
-    case WS_EVT_ERROR:
-      break;
+  switch (type){
+  case WS_EVT_CONNECT:
+    Serial.printf("WebSocket client #%u connected from %s\n", client->id(), client->remoteIP().toString().c_str());
+    break;
+  case WS_EVT_DISCONNECT:
+    Serial.printf("WebSocket client #%u disconnected\n", client->id());
+    break;
+  case WS_EVT_DATA:
+    handleWebSocketMessage(arg, data, len);
+    break;
+  case WS_EVT_PONG:
+  case WS_EVT_ERROR:
+    break;
   }
 }
 
@@ -278,23 +275,29 @@ void iniciarWebSocket(){
 
 // Tarefas WebSocket - Fim
 
+void tarefaBotao(void *pvParameters){
+  pinMode(BOTAO_PINO, INPUT_PULLUP);
 
-void tarefaBotao(void *pvParameters) {
-  pinMode(BOTAO_PINO, INPUT);
+
+  TickType_t xLastWakeTime = xTaskGetTickCount();
 
   while(1){
     int botaoPressionado = digitalRead(BOTAO_PINO);
-
     Serial.println(botaoPressionado);
-    
-    if(botaoPressionado == HIGH){
-      xSemaphoreTake(statusMutex, portMAX_DELAY);
-      Serial.println("Ola botao");
-      statusBotao = 1;
-      xSemaphoreGive(statusMutex);
+
+    if(botaoPressionado != ultimaLeituraBotao){
+      vTaskDelay(debounceDelay / portTICK_PERIOD_MS);
+      botaoPressionado = digitalRead(BOTAO_PINO);
+
+      if(botaoPressionado == LOW){
+        xSemaphoreTake(statusMutex, portMAX_DELAY);
+        statusBotao = 1;
+        xSemaphoreGive(statusMutex);
+      }
     }
 
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    ultimaLeituraBotao = botaoPressionado;
+    vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(2000));
   }
 }
 
@@ -303,10 +306,10 @@ void tarefaVibracao(void *pvParameters){
 
   TickType_t xLastWakeTime = xTaskGetTickCount();
 
-  while (1){
+  while(1){
     int sensorVibracao = digitalRead(VIBRACAO_PINO);
 
-    if(sensorVibracao != ultimaLeitura){
+    if(sensorVibracao != ultimaLeituraVibracao){
       vTaskDelay(debounceDelay / portTICK_PERIOD_MS);
       sensorVibracao = digitalRead(VIBRACAO_PINO);
 
@@ -317,7 +320,7 @@ void tarefaVibracao(void *pvParameters){
       }
     }
 
-    ultimaLeitura = sensorVibracao;
+    ultimaLeituraVibracao = sensorVibracao;
     vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(2000));
   }
 }
@@ -325,17 +328,15 @@ void tarefaVibracao(void *pvParameters){
 void tarefaTemperatura(void *pvParameters){
   TickType_t xLastWakeTime = xTaskGetTickCount();
 
-  while(1){
+  while (1){
     float temperatura = analogRead(TEMPERATURA_PINO) * (3.3 / 4095) * 100;
 
-    Serial.println(temperatura);
-
-    if(temperatura > 15.0){
+    if (temperatura > 15.0){
       xSemaphoreTake(statusMutex, portMAX_DELAY);
       statusTemperatura = 1;
       xSemaphoreGive(statusMutex);
     }
-  
+
     vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(10000));
   }
 }
@@ -347,13 +348,13 @@ void tarefaRuido(void *pvParameters){
   const int periodoLeitura = 10000;
   const int numLeituras = tempoLimite * 1000 / periodoLeitura;
 
-  while (1){
+  while(1){
     float nivelRuido = analogRead(RUIDO_PINO);
 
     if(nivelRuido > limiteRuido){
       contadorLimite++;
 
-      if (contadorLimite >= numLeituras){
+      if(contadorLimite >= numLeituras){
         xSemaphoreTake(statusMutex, portMAX_DELAY);
         statusRuido = 1;
         xSemaphoreGive(statusMutex);
@@ -384,18 +385,24 @@ void tarefaRelogio(void *pvParameters){
 void tarefaBuzzer(void *pvParameters){
   pinMode(BUZZER_PINO, OUTPUT);
 
-  while(1){
+  // Configuração do canal LEDC para o buzzer
+  ledcSetup(0, 3000, 8);         // Canal 0, frequência, resolução
+  ledcAttachPin(BUZZER_PINO, 0); // Pino do buzzer para o canal 0
+
+  while (1){
     xSemaphoreTake(statusMutex, portMAX_DELAY);
-    if(statusVibracao == 1 && !buzzerAtivado){
+    if (statusVibracao == 1 && !buzzerAtivado){
       Serial.println("Buzzer ativado aqui!");
       statusBuzzer = 1;
       buzzerAtivado = true;
     }
     xSemaphoreGive(statusMutex);
 
-    if(statusBuzzer == 1){
+    if (statusBuzzer == 1){
       // Ativa o buzzer
-      // tone(BUZZER_PINO, frequenciaDoSom, duracaoDoSom);
+      ledcWriteTone(0, 3000); // Ativa a frequência no canal 0
+      delay(3000);
+      ledcWriteTone(0, 0); // Desativa o canal 0
       Serial.println("Buzzer ativado!");
 
       // Marca como inativo para evitar que o buzzer seja ativado continuamente
@@ -408,13 +415,13 @@ void tarefaBuzzer(void *pvParameters){
   }
 }
 
-void tarefaMonitor(void *pvParameters) {
-  while (1) {
+void tarefaMonitor(void *pvParameters){
+  while (1){
     vTaskDelay(15000 / portTICK_PERIOD_MS); // Ajuste para 15 segundos
 
     xSemaphoreTake(statusMutex, portMAX_DELAY);
 
-    if(statusBotao == 1) {
+    if (statusBotao == 1){
       Serial.println("Botão pressionado!");
 
       JSONVar statusSensorPoeira;
@@ -426,7 +433,7 @@ void tarefaMonitor(void *pvParameters) {
       statusBotao = 0;
     }
 
-    if(statusVibracao == 1) {
+    if (statusVibracao == 1){
       Serial.println("Vibração detectada!");
 
       JSONVar statusSensorVibracao;
@@ -438,7 +445,7 @@ void tarefaMonitor(void *pvParameters) {
       statusVibracao = 0;
     }
 
-    if(statusTemperatura == 1) {
+    if (statusTemperatura == 1){
       Serial.println("Temperatura acima de 15 graus!");
 
       JSONVar statusSensorTemperatura;
@@ -450,7 +457,7 @@ void tarefaMonitor(void *pvParameters) {
       statusTemperatura = 0;
     }
 
-    if(statusRuido == 1) {
+    if (statusRuido == 1){
       Serial.println("Ruído acima de 30 dB!");
 
       JSONVar statusSensorRuido;
@@ -482,29 +489,12 @@ void setup(){
   xTaskCreatePinnedToCore(tarefaMonitor, "TarefaMonitor", 4096, NULL, 3, NULL, 0);
 
   // URL raiz do servidor Web
-  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-    request->send_P(200, "text/html", index_html);
-  });
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){ request->send_P(200, "text/html", index_html); });
 
   // Iniciar servidor
   server.begin();
 }
 
 void loop(){
-  // if((millis() - lastTime) > timerDelay){
-  //   String sensorReadings = JSON.stringify(readings);
-  //   if(ultimoResultado == " "){
-  //     Serial.println(sensorReadings);
-  //     Serial.println("Primeira execucao");
-  //     ultimoResultado = sensorReadings;
-  //   }
-  //   if(ultimoResultado != sensorReadings){
-  //     ultimoResultado = sensorReadings;
-  //     Serial.println(sensorReadings);
-  //     notificarClientes(sensorReadings);
-  //   }
-  //   lastTime = millis();
-  // }
-
   ws.cleanupClients();
 }
