@@ -25,7 +25,7 @@ int ultimaLeituraBotao = 1;
 int ultimaLeituraVibracao = 0;
 int debounceDelay = 50;
 const int limiteRuido = 240;
-const int tempoLimite = 10;
+const int tempoLimite = 4;
 bool buzzerAtivado = false;
 bool relogioAtivado = false;
 String ultimoResultado = " ";
@@ -295,7 +295,7 @@ void tarefaBotao(void *pvParameters){
     }
 
     ultimaLeituraBotao = botaoPressionado;
-    vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(2000));
+    vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(5000));
   }
 }
 
@@ -335,7 +335,7 @@ void tarefaTemperatura(void *pvParameters){
       xSemaphoreGive(statusMutex);
     }
 
-    vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(10000));
+    vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(7000));
   }
 }
 
@@ -343,7 +343,7 @@ void tarefaRuido(void *pvParameters){
   TickType_t xLastWakeTime = xTaskGetTickCount();
 
   int contadorLimite = 0;
-  const int periodoLeitura = 10000;
+  const int periodoLeitura = 4000;
   const int numLeituras = tempoLimite * 1000 / periodoLeitura;
 
   while(1){
@@ -366,20 +366,6 @@ void tarefaRuido(void *pvParameters){
   }
 }
 
-void tarefaRelogio(void *pvParameters){
-  while (1){
-    xSemaphoreTake(statusMutex, portMAX_DELAY);
-    if (statusRuido == 1 && !relogioAtivado){
-      Serial.println("Relógio ativado aqui!");
-      statusRelogio = 1;
-      relogioAtivado = true;
-    }
-    xSemaphoreGive(statusMutex);
-
-    vTaskDelay(100 / portTICK_PERIOD_MS);
-  }
-}
-
 void tarefaBuzzer(void *pvParameters){
   pinMode(BUZZER_PINO, OUTPUT);
 
@@ -387,16 +373,16 @@ void tarefaBuzzer(void *pvParameters){
   ledcSetup(0, 3000, 8);         // Canal 0, frequência, resolução
   ledcAttachPin(BUZZER_PINO, 0); // Pino do buzzer para o canal 0
 
-  while (1){
+  while(1){
     xSemaphoreTake(statusMutex, portMAX_DELAY);
-    if (statusVibracao == 1 && !buzzerAtivado){
+    if(statusVibracao == 1 && !buzzerAtivado){
       Serial.println("Buzzer ativado aqui!");
       statusBuzzer = 1;
       buzzerAtivado = true;
     }
     xSemaphoreGive(statusMutex);
 
-    if (statusBuzzer == 1){
+    if(statusBuzzer == 1 && !buzzerAtivado){
       // Ativa o buzzer
       ledcWriteTone(0, 3000); // Ativa a frequência no canal 0
       delay(3000);
@@ -409,13 +395,13 @@ void tarefaBuzzer(void *pvParameters){
       xSemaphoreGive(statusMutex);
     }
 
-    vTaskDelay(100 / portTICK_PERIOD_MS);
+    vTaskDelay(2000 / portTICK_PERIOD_MS);
   }
 }
 
 void tarefaMonitor(void *pvParameters){
   while (1){
-    vTaskDelay(15000 / portTICK_PERIOD_MS); // Ajuste para 15 segundos
+    vTaskDelay(10000 / portTICK_PERIOD_MS); // Ajuste para 10 segundos
 
     xSemaphoreTake(statusMutex, portMAX_DELAY);
 
@@ -441,6 +427,7 @@ void tarefaMonitor(void *pvParameters){
       Serial.println(statusSensor);
       notificarClientes(statusSensor);
       statusVibracao = 0;
+      buzzerAtivado = false;
     }
 
     if (statusTemperatura == 1){
@@ -477,14 +464,13 @@ void setup(){
   iniciarWifi();
   statusMutex = xSemaphoreCreateMutex();
 
-  xTaskCreatePinnedToCore(tarefaVibracao, "TarefaVibracao", 4096, NULL, 1, NULL, 1);
-  xTaskCreatePinnedToCore(tarefaRuido, "TarefaRuido", 4096, NULL, 2, NULL, 1);
-  xTaskCreatePinnedToCore(tarefaTemperatura, "TarefaTemperatura", 4096, NULL, 3, NULL, 1);
-  xTaskCreatePinnedToCore(tarefaBotao, "TarefaBotao", 4096, NULL, 4, NULL, 1);
+  xTaskCreatePinnedToCore(tarefaVibracao, "TarefaVibracao", 4096, NULL, 1, NULL, 0);
+  xTaskCreatePinnedToCore(tarefaRuido, "TarefaRuido", 4096, NULL, 2, NULL, 0);
+  xTaskCreatePinnedToCore(tarefaTemperatura, "TarefaTemperatura", 4096, NULL, 3, NULL, 0);
+  xTaskCreatePinnedToCore(tarefaBotao, "TarefaBotao", 4096, NULL, 4, NULL, 0);
 
-  xTaskCreatePinnedToCore(tarefaBuzzer, "TarefaBuzzer", 4096, NULL, 1, NULL, 0);
-  xTaskCreatePinnedToCore(tarefaRelogio, "TarefaRelogio", 4096, NULL, 2, NULL, 0);
-  xTaskCreatePinnedToCore(tarefaMonitor, "TarefaMonitor", 4096, NULL, 3, NULL, 0);
+  xTaskCreatePinnedToCore(tarefaBuzzer, "TarefaBuzzer", 4096, NULL, 1, NULL, 1);
+  xTaskCreatePinnedToCore(tarefaMonitor, "TarefaMonitor", 4096, NULL, 2, NULL, 1);
 
   // URL raiz do servidor Web
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){ request->send_P(200, "text/html", index_html); });
