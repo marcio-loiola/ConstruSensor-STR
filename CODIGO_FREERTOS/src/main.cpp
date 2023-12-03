@@ -278,12 +278,10 @@ void iniciarWebSocket(){
 void tarefaBotao(void *pvParameters){
   pinMode(BOTAO_PINO, INPUT_PULLUP);
 
-
   TickType_t xLastWakeTime = xTaskGetTickCount();
 
   while(1){
     int botaoPressionado = digitalRead(BOTAO_PINO);
-    Serial.println(botaoPressionado);
 
     if(botaoPressionado != ultimaLeituraBotao){
       vTaskDelay(debounceDelay / portTICK_PERIOD_MS);
