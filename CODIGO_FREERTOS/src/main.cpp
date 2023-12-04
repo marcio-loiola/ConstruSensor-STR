@@ -19,7 +19,6 @@ int statusBotao = 0;
 int statusVibracao = 0;
 int statusTemperatura = 0;
 int statusRuido = 0;
-int statusRelogio = 0;
 int statusBuzzer = 0;
 int ultimaLeituraBotao = 1;
 int ultimaLeituraVibracao = 0;
@@ -27,7 +26,6 @@ int debounceDelay = 50;
 const int limiteRuido = 240;
 const int tempoLimite = 4;
 bool buzzerAtivado = false;
-bool relogioAtivado = false;
 String ultimoResultado = " ";
 
 // WEBSocket
